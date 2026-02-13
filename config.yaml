@@ -69,31 +69,33 @@ static_resources:
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-                      inline_code: |
-                        function envoy_on_request(handle)
-                          local headers = handle:headers()
-                          local n = tonumber(headers:get("x-foo"))
-                          if n == nil then
-                            headers:add("x-foo-error", "parsing number failed")
-                            return
+                      default_source_code:
+                        inline_string: |
+                          function envoy_on_request(handle)
+                            local headers = handle:headers()
+                            local n = tonumber(headers:get("x-foo"))
+                            if n == nil then
+                              headers:add("x-foo-error", "parsing number failed")
+                              return
+                            end
+                            headers:replace("x-foo", tostring(n + 1))
                           end
-                          headers:replace("x-foo", tostring(n + 1))
-                        end
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-                      inline_code: |
-                        function envoy_on_request(handle)
-                          local headers = handle:headers()
-                          local n = headers:get("x-foo")
-                          local output = headers:get("x-fizzbuzz") or ""
-                          if output ~= "" then
-                            output = output .. ","
+                      default_source_code:
+                        inline_string: |
+                          function envoy_on_request(handle)
+                            local headers = handle:headers()
+                            local n = headers:get("x-foo")
+                            local output = headers:get("x-fizzbuzz") or ""
+                            if output ~= "" then
+                              output = output .. ","
+                            end
+                            local lookup = {"Fizz", "Buzz", "FizzBuzz"}
+                            local fb = lookup[(n % 3 == 0 and 1 or 0) + (n % 5 == 0 and 2 or 0)] or n
+                            headers:replace("x-fizzbuzz", output .. tostring(fb))
                           end
-                          local lookup = {"Fizz", "Buzz", "FizzBuzz"}
-                          local fb = lookup[(n % 3 == 0 and 1 or 0) + (n % 5 == 0 and 2 or 0)] or n
-                          headers:replace("x-fizzbuzz", output .. tostring(fb))
-                        end
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -122,21 +124,22 @@ static_resources:
                   - name: envoy.filters.http.lua
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-                      inline_code: |
-                        function envoy_on_request(handle)
-                          local req_headers = handle:headers()
-                          local resp_headers = {
-                            [":status"] = "200",
-                            ["content-type"] = "text/plain"
-                          }
+                      default_source_code:
+                        inline_string: |
+                          function envoy_on_request(handle)
+                            local req_headers = handle:headers()
+                            local resp_headers = {
+                              [":status"] = "200",
+                              ["content-type"] = "text/plain"
+                            }
 
-                          local fb = req_headers:get("x-fizzbuzz")
-                          if fb == nil then
-                            handle:respond(resp_headers, "FAIL, header x-fizzbuzz missing\n")
+                            local fb = req_headers:get("x-fizzbuzz")
+                            if fb == nil then
+                              handle:respond(resp_headers, "FAIL, header x-fizzbuzz missing\n")
+                            end
+
+                            handle:respond(resp_headers, "FizzBuzz:\n" .. fb .. "\n")
                           end
-
-                          handle:respond(resp_headers, "FizzBuzz:\n" .. fb .. "\n")
-                        end
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
