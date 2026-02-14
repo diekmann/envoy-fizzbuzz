@@ -38,3 +38,7 @@ FizzBuzz:
 Or in the browser directly:
 
 ![FizzBuzz shown in the Firefox browser](img/fizzbuzz_firefox.png)
+
+## Architecture
+
+![Architecture of the config.yaml](img/architecture.png)
