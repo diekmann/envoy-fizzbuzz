@@ -23,9 +23,6 @@ podman run --rm -it -p 127.0.0.1:9901:9901 -p 10000:10000 -p 127.0.0.1:10001:100
 For production usage, please note the security-hardening of the container runtime:
 Only the FizzBuzz application port 10000 is exposed over the network; internal listeners and the admin interface are limited to localhost.
 
-TODO: Did the `--network host` disable the portmapping???
-Yes!!!
-
 ## Usage
 
 ```sh
@@ -41,141 +38,13 @@ Or in the browser directly:
 
 ![FizzBuzz shown in the Firefox browser](img/fizzbuzz_firefox.png)
 
-### Public API
-
-The main application port is 1000.
-We accept plain HTTP `GET /` requests for a normal FizzBuzz.
-
-Both HTTP/1.1 ...
-
-```sh
-$ curl -v 127.0.0.1:10000
-*   Trying 127.0.0.1:10000...
-* Connected to 127.0.0.1 (127.0.0.1) port 10000
-* using HTTP/1.x
-> GET / HTTP/1.1
-> Host: 127.0.0.1:10000
-> User-Agent: curl/8.14.1
-> Accept: */*
-> 
-* Request completely sent off
-< HTTP/1.1 200 OK
-< content-type: text/plain
-< content-length: 423
-< date: Sun, 15 Feb 2026 13:34:37 GMT
-< server: envoy
-< x-envoy-upstream-service-time: 22
-< 
-FizzBuzz:
-1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,...
-```
-
-... and HTTP/2 are supported:
-
-```sh
-$ curl -v --http2 --http2-prior-knowledge 127.0.0.1:10000
-Warning: Overrides previous HTTP version option
-*   Trying 127.0.0.1:10000...
-* Connected to 127.0.0.1 (127.0.0.1) port 10000
-* using HTTP/1.x
-* [HTTP/2] [1] OPENED stream for http://127.0.0.1:10000/
-* [HTTP/2] [1] [:method: GET]
-* [HTTP/2] [1] [:scheme: http]
-* [HTTP/2] [1] [:authority: 127.0.0.1:10000]
-* [HTTP/2] [1] [:path: /]
-* [HTTP/2] [1] [user-agent: curl/8.14.1]
-* [HTTP/2] [1] [accept: */*]
-> GET / HTTP/2
-> Host: 127.0.0.1:10000
-> User-Agent: curl/8.14.1
-> Accept: */*
-> 
-* Request completely sent off
-< HTTP/2 200 
-< content-type: text/plain
-< content-length: 423
-< date: Sun, 15 Feb 2026 13:33:45 GMT
-< server: envoy
-< x-envoy-upstream-service-time: 21
-< 
-FizzBuzz:
-1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,1...
-```
-
-It is possible to also specify the the header `x-foo` to start FizzBuzz at any number below 100:
-
-```sh
-$ curl -v --header 'x-foo: 42' 127.0.0.1:10000
-*   Trying 127.0.0.1:10000...
-* Connected to 127.0.0.1 (127.0.0.1) port 10000
-* using HTTP/1.x
-> GET / HTTP/1.1
-> Host: 127.0.0.1:10000
-> User-Agent: curl/8.14.1
-> Accept: */*
-> x-foo: 42
-> 
-* Request completely sent off
-< HTTP/1.1 200 OK
-< content-type: text/plain
-< content-length: 254
-< date: Sun, 15 Feb 2026 13:20:09 GMT
-< server: envoy
-< x-envoy-upstream-service-time: 19
-< 
-FizzBuzz:
-43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,...
-```
-
-The FizzBuzz count stops at 100.
-Though, it is possible to request a FizzBuzz for individual larger numbers:
-
-```sh
-curl --header 'x-foo: 9999' 127.0.0.1:10000
-FizzBuzz:
-Buzz
-```
-
-Negative numbers technically work, ....
-
-```sh
-$ curl --header 'x-foo: -9' 127.0.0.1:10000
-FizzBuzz:
--8,-7,Fizz,Buzz,-4,Fizz,-2,-1,FizzBuzz,1,2,Fizz,4,Buzz,...
-```
-
-..., but since we iterate till 100, they may easily overwhelm Envoy, ...
-
-```sh
-curl --header 'x-foo: -9999' 127.0.0.1:10000
-upstream connect error or disconnect/reset before headers. reset reason: overflow
-```
-
-Non-numbers are not supported.
-They get forwarded to the internal listeners, where they frighten the Lua filters.
-
-```sh
-curl --header 'x-foo: x' 127.0.0.1:10000
-upstream connect error or disconnect/reset before headers. reset reason: remote reset
-```
-
-```data
-[2026-02-15 13:27:12.524][11][error][lua] [source/extensions/filters/common/lua/lua.cc:32] script log: [string "function envoy_on_request(handle)..."]:9: attempt to perform arithmetic on local 'n' (a string value)
-```
-
-To harden the service against malicious incoming traffic, it is recommended to replace the `request_headers_to_add` `append_action: ADD_IF_ABSENT` with `append_action: OVERWRITE_IF_EXISTS_OR_ADD` to always force a clean start at 0, preventing untrusted data to reach the internal listeners.
-This is at the cost of reduced flexibility, no longer permitting a user to specify the start of the FizzBuzz.
-An enabled-by-default technical fix would be simple, but this would mean dropping those security considerations from the docs, reducing the enterprise-grade vibes.
-
-### Internal API
-
-The envoy admin interface is reachable via port 9901 on localhost.
-The internal ports are reachable on 10001 and 10002, but only on localhost for debugging.
-It's easy to cause Lua errors by speaking to the internal ports.
+The full API is documented in [API.md](API.md)
 
 ## Architecture
 
 ![Architecture of the config.yaml](img/architecture.png)
+
+TODO: explain the life of a request. In steps. And outline config. (Github links to lines?)
 
 ### Internals
 
@@ -203,19 +72,18 @@ This also disables the portmapping and makes all ports, including the admin inte
 
 #### Performance
 
-
 FizzBuzz'ing directly at the edge allows to shave off over 10ms of latency and enables serving 10x more requests per second!
 
 #### Benchmarking setup
 
 T460 i5-6300U CPU @ 2.40GHz speedstep disabled (actually, broken, CPU aged?)
 
-
 According to ChatGPT, we can compare to a state-of-the-art minimal webserver, using netcat:
 
 ```sh
 while true; do echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: 423\r\nConnection: close\r\n\r\nFizzBuzz:\n1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz,Fizz,22,23,Fizz,Buzz,26,Fizz,28,29,FizzBuzz,31,32,Fizz,34,Buzz,Fizz,37,38,Fizz,Buzz,41,Fizz,43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,Fizz,58,59,FizzBuzz,61,62,Fizz,64,Buzz,Fizz,67,68,Fizz,Buzz,71,Fizz,73,74,FizzBuzz,76,77,Fizz,79,Buzz,Fizz,82,83,Fizz,Buzz,86,Fizz,88,89,FizzBuzz,91,92,Fizz,94,Buzz,Fizz,97,98,Fizz,Buzz" | nc -l 10000; done
 ```
+
 (which is fast!!)
 
 But actually need to compute, ....
@@ -226,16 +94,13 @@ while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) o
 
 For fairness, since above server is also single-threaded, we only benachmark with one thread
 
-wrk --threads 1 http://127.0.0.1:10000/
+wrk --threads 1 <http://127.0.0.1:10000/>
 
 Also add a 65ms delay, to simulate having to reach the backend, while the Envoy proxy can answer directly from the network edge.
 
 ```sh
 while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz);import time; time.sleep(65/1000)' | nc -l 10000; done
 ```
-
-
-
 
 Envoy
 
@@ -251,11 +116,10 @@ Requests/sec:    149.83
 Transfer/sec:     84.28KB
 ```
 
-
-
 ```
 while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz);import time; time.sleep(65/1000)' | nc -l 10000; done
 ```
+
 ```
 $ wrk --threads 1 http://127.0.0.1:10000/
 Running 10s test @ http://127.0.0.1:10000/
@@ -274,6 +138,7 @@ More real comparison targets
 ```
 while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz)' | nc -l 10000; done
 ```
+
 ```
 $ wrk --threads 1 http://127.0.0.1:10000/
 Running 10s test @ http://127.0.0.1:10000/
@@ -289,10 +154,10 @@ Transfer/sec:     20.54KB
 
 (including py startup)
 
-
 ```
 while true; do echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: 423\r\nConnection: close\r\n\r\nFizzBuzz:\n1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz,Fizz,22,23,Fizz,Buzz,26,Fizz,28,29,FizzBuzz,31,32,Fizz,34,Buzz,Fizz,37,38,Fizz,Buzz,41,Fizz,43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,Fizz,58,59,FizzBuzz,61,62,Fizz,64,Buzz,Fizz,67,68,Fizz,Buzz,71,Fizz,73,74,FizzBuzz,76,77,Fizz,79,Buzz,Fizz,82,83,Fizz,Buzz,86,Fizz,88,89,FizzBuzz,91,92,Fizz,94,Buzz,Fizz,97,98,Fizz,Buzz" | nc -l 10000; done
 ```
+
 ```
 $ wrk --threads 1 http://127.0.0.1:10000/
 Running 10s test @ http://127.0.0.1:10000/
@@ -306,9 +171,8 @@ Requests/sec:    336.98
 Transfer/sec:    167.17KB
 ```
 
-
-
 also, `python3 -m http.server 10000` which serves index.html.
+
 ```
  wrk --threads 1 http://127.0.0.1:10000/
 Running 10s test @ http://127.0.0.1:10000/
@@ -321,8 +185,8 @@ Requests/sec:   1387.07
 Transfer/sec:    824.93KB
 ```
 
-
 Also, `podman run --rm -it -p 10000:80 -v $(pwd)/site:/usr/share/nginx/html:ro docker.io/nginx:alpine` is fast!
+
 ```
 wrk --threads 1 http://127.0.0.1:10000/
 Running 10s test @ http://127.0.0.1:10000/
@@ -349,5 +213,3 @@ Running 10s test @ http://127.0.0.1:10000/
 Requests/sec:     74.69
 Transfer/sec:     48.21KB
 ```
-
-
