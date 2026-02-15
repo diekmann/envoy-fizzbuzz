@@ -44,8 +44,8 @@ Or in the browser directly:
 
 ### Internals WIP
 
-Using Wireshark, one end2end FizzBuzz results in 717 packets.
-This is because all internal requests are HTTP/1.1.
+Using Wireshark, we can see that one end2end FizzBuzz requests results in a total of 717 packets.
+This is because all internal requests default to HTTP/1.1.
 Which means, each internal `x-foo` iteration results in a full TCP 3 way handshake.
 Then, the `GET / HTTP/1.1` packet, followed by a TCP `ACK`, followed by passing through the `HTTP/1.1 200` reply with the payload, followed by a TCP `ACK`.
 That is a total of 7 loopback packets for each of the 100 internal iterations of FizBuzz.
