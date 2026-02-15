@@ -42,7 +42,9 @@ Or in the browser directly:
 
 ![Architecture of the config.yaml](img/architecture.png)
 
-### Internals WIP
+### Internals
+
+#### HTTP/2 Upgrade
 
 Using Wireshark, we can see that one end2end FizzBuzz requests results in a total of 717 packets.
 This is because all internal requests default to HTTP/1.1.
@@ -56,3 +58,7 @@ With the internal listeners upgraded to HTTP/2, we are down to 333 packets in to
 This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
 
 ![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
+
+Trying to upgrade further, to HTTP/3, would likely be a step backward, since HTTP/3 mandates encryption, which is pointless overhead for localhost connections.
+We could tune our setup further, by replacing the localhost TCP connection with a Unix Domain Socket.
+But we would lose a bit of the networking vibes here.
