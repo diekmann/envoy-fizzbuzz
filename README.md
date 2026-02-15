@@ -78,18 +78,8 @@ FizzBuzz'ing directly at the edge allows to shave off over 10ms of latency and e
 
 All measurements were done on my retro 10 year old ThinkPad T460, 16Gb RAM, i5-6300U with speedstep disabled for reproducibility (actually, it seems the skylake CPU has aged, when it clocks down from high GHz speedstep states, the system likes to hard-freeze).
 
-According to ChatGPT, we can compare our solution to a state-of-the-art minimal webserver, using netcat:
-
-```sh
-while true; do echo -e "HTTP/1.1 200 OK\r\n..." | nc -l 10000; done
-```
-
-But instead of serving static content, we actually need to _compute_ FizzBuzz, so we compare against:
-
-```sh
-while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz)' | nc -l 10000; done
-```
-
+According to ChatGPT, we can compare our solution to a state-of-the-art minimal webserver, using netcat in a `while true` loop.
+But instead of serving static content, we actually need to _compute_ FizzBuzz, so we use `python3` to compute the HTTP reply.
 In addition, since all testing was done on localhost, to simulate having to reach a remote backend, we add a 65ms delay via `time.sleep(65/1000)`:
 
 ```sh
@@ -102,17 +92,12 @@ In contrast, the Envoy proxy can answer directly from the network edge.
 
 I'm sure this is an absolutely fair setup. :wink:
 
-For fairness :wink:, since above server is single-threaded, we only benachmark with one thread
+Since above reference FizzBuzz server is single-threaded, we only benachmark with one thread. Our benchmarking tool is `wrk --threads 1 http://127.0.0.1:10000/`.
+The results:
 
-Our benchmarking tool is
-
-```sh
-wrk --threads 1 http://127.0.0.1:10000/
-```
-
-|                         | nc-python3     | Envoy-FizzBuzz | Speedup     |
-| ----------------------- | -------------- | -------------- | ----------- |
-| Reqests / Second (avg)  | 11.08          | 150.40         | **> 10X**   |
-| Latency (avg)           | 82.32ms        | 66.50ms        | **> 10ms**  |
+|                                            | nc-python3     | Envoy-FizzBuzz | Speedup     |
+| ------------------------------------------ | -------------- | -------------- | ----------- |
+| Reqests / Second (avg)<br/>More is better  | 11.08          | 150.40         | **> 10X**   |
+| Latency (avg)<br/>Less is better           | 82.32ms        | 66.50ms        | **> 10ms**  |
 
 All benchmarking data is available in [Benchmark.md](Benchmark.md).
