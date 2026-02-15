@@ -7,7 +7,6 @@ FizzBuzz in the Envoy Proxy.
 The [Envoy Proxy](https://www.envoyproxy.io) is an industry-embraced network proxy.
 It can be used to create a [service mesh](https://www.envoyproxy.io/docs/envoy/latest/intro/deployment_types/service_to_service) and/or as [edge proxy](https://www.envoyproxy.io/docs/envoy/latest/intro/deployment_types/double_proxy).
 
-
 FizzBuzz is an industry-grade algorithmic problem, apparently in need by major companies.
 
 Envoy-FizzBuzz brings FizzBuzz to the Envoy Proxy, enabling the FizzBuzz computation right at the network.
@@ -52,3 +51,8 @@ Then, the `GET / HTTP/1.1` packet, followed by a TCP `ACK`, followed by passing 
 That is a total of 7 loopback packets for each of the 100 internal iterations of FizBuzz.
 
 ![Screenshot of Wireshark, showing the 7 packets for one internal recursion](img/wireshark_http11_recursion_annotated.png)
+
+With the internal listeners upgraded to HTTP/2, we are down to 333 packets in total.
+This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
+
+![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)

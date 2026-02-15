@@ -147,6 +147,7 @@ static_resources:
   clusters:
     - name: self
       type: STATIC
+      http2_protocol_options: {} # Upgrade to HTTP/2
       load_assignment:
         cluster_name: self
         endpoints:
@@ -158,6 +159,7 @@ static_resources:
                       port_value: 10001
     - name: self_output
       type: STATIC
+      http2_protocol_options: {} # Upgrade to HTTP/2
       load_assignment:
         cluster_name: self
         endpoints:
