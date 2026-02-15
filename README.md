@@ -17,11 +17,14 @@ This enables all applications in a service mesh to seamlessly leverage FizzBuzz 
 With the `config.yaml` of this repository, a genuine vanilla upstream Envoy container image is sufficient for Envoy-FizzBuzz:
 
 ```sh
-podman run --rm -it --network host -p 127.0.0.1:9901:9901 -p 10000:10000 -p 127.0.0.1:10001:10001 -p127.0.0.1:10002:10002 -v $(pwd)/config.yaml:/config.yaml docker.io/envoyproxy/envoy:v1.37-latest --log-level info -c config.yaml
+podman run --rm -it -p 127.0.0.1:9901:9901 -p 10000:10000 -p 127.0.0.1:10001:10001 -p127.0.0.1:10002:10002 -v $(pwd)/config.yaml:/config.yaml docker.io/envoyproxy/envoy:v1.37-latest --log-level info -c config.yaml
 ```
 
 For production usage, please note the security-hardening of the container runtime:
 Only the FizzBuzz application port 10000 is exposed over the network; internal listeners and the admin interface are limited to localhost.
+
+TODO: Did the `--network host` disable the portmapping???
+Yes!!!
 
 ## Usage
 
@@ -194,3 +197,35 @@ This is because the recursive self-requests are now done over the same TCP conne
 Trying to upgrade further, to HTTP/3, would likely be a step backward, since HTTP/3 mandates encryption, which is pointless overhead for localhost connections.
 We could tune our setup further, by replacing the localhost TCP connection with a Unix Domain Socket.
 But we would lose a bit of the networking vibes here.
+
+Note: To capture traffic with Wireshark, the container needs to be run with `--network host`.
+This also disables the portmapping and makes all ports, including the admin interface, available over the network!
+
+#### Performance
+
+According to ChatGPT, we can compare to a state-of-the-art minimal webserver, using netcat:
+
+```sh
+while true; do echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: 423\r\nConnection: close\r\n\r\nFizzBuzz:\n1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz,Fizz,22,23,Fizz,Buzz,26,Fizz,28,29,FizzBuzz,31,32,Fizz,34,Buzz,Fizz,37,38,Fizz,Buzz,41,Fizz,43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,Fizz,58,59,FizzBuzz,61,62,Fizz,64,Buzz,Fizz,67,68,Fizz,Buzz,71,Fizz,73,74,FizzBuzz,76,77,Fizz,79,Buzz,Fizz,82,83,Fizz,Buzz,86,Fizz,88,89,FizzBuzz,91,92,Fizz,94,Buzz,Fizz,97,98,Fizz,Buzz" | nc -l 10000; done
+```
+(which is fast!!)
+
+But actually need to compute, ....
+
+```sh
+while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz)' | nc -l 10000; done
+```
+
+For fairness, since above server is also single-threaded, we only benachmark with one thread
+
+wrk --threads 1 http://127.0.0.1:10000/
+
+Also add a 60ms delay, to simulate having to reach the backend, while the Envoy proxy can answer directly from the network edge.
+
+```sh
+while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz);import time; time.sleep(60/1000)' | nc -l 10000; done
+```
+
+also, `python3 -m http.server 10000` which serves index.html.
+
+Also, `podman run --rm -it -p 10000:80 -v $(pwd)/site:/usr/share/nginx/html:ro docker.io/nginx:alpine` is fast!
