@@ -98,6 +98,10 @@ while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) o
 
 In contrast, the Envoy proxy can answer directly from the network edge.
 
+![Benchmarking Setup: FizzBuzz at the Edge Proxy, not the Backend](img/edge.png)
+
+I'm sure this is an absolutely fair setup. :wink:
+
 For fairness :wink:, since above server is single-threaded, we only benachmark with one thread
 
 Our benchmarking tool is
