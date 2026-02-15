@@ -110,14 +110,9 @@ Our benchmarking tool is
 wrk --threads 1 http://127.0.0.1:10000/
 ```
 
-This gives us the following baseline, for the nc-python3 webserver:
-
-* Latency    82.32ms
-* Req/Sec    11.08
-
-Our Envoy-FizzBuzz gives the following performance numbers:
-
-* Latency    66.50ms
-* Req/Sec   150.40
+|                         | nc-python3     | Envoy-FizzBuzz | Speedup     |
+| ----------------------- | -------------- | -------------- | ----------- |
+| Reqests / Second (avg)  | 11.08          | 150.40         | **> 10X**   |
+| Latency (avg)           | 82.32ms        | 66.50ms        | **> 10ms**  |
 
 All benchmarking data is available in [Benchmark.md](Benchmark.md).
