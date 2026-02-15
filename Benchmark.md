@@ -39,6 +39,9 @@ Requests/sec:     11.07
 Transfer/sec:      5.49KB
 ```
 
+Yes, I thought that spinning up a python interpreter per request was bad enough such that Envoy-FizzBuzz beats the reference, but we really had to add some `sleep` to be bad enough.
+Wow :flushed:
+
 ## The Really Unfair NetCat Python Server
 
 Without `sleep`.
@@ -79,9 +82,15 @@ Requests/sec:    336.98
 Transfer/sec:    167.17KB
 ```
 
+Given that I was looking for a really horrible reference implementation, this is impressing good!
+
+Also, the super low latency (μs, not ms) shows that `wrk` probably doesn't measure end 2 end latency, but only application-level latency once the connection is established.
+That's why I had to put the above `sleep` into the python call, right before it closes the pipe, so the sleep happens during the connection.
+A normal bash `sleep` in the `while true` call did not influence the latency measured by `wrk`.
+
 ## Actual Python Webserver
 
-also, `python3 -m http.server 10000` which serves index.html.
+also, `python3 -m http.server 10000` which serves a static index.html.
 
 ```sh
 $ wrk --threads 1 http://127.0.0.1:10000/
@@ -97,7 +106,11 @@ Transfer/sec:    824.93KB
 
 ## nginx
 
-Also, `podman run --rm -it -p 10000:80 -v $(pwd)/site:/usr/share/nginx/html:ro docker.io/nginx:alpine` is fast!
+Probably the only real reference comparison.
+
+```sh
+podman run --rm -it -p 10000:80 -v $(pwd)/site:/usr/share/nginx/html:ro docker.io/nginx:alpine
+```
 
 ```sh
 $ wrk --threads 1 http://127.0.0.1:10000/
@@ -111,7 +124,10 @@ Requests/sec:   9458.41
 Transfer/sec:      5.96MB
 ```
 
-same with actual 65ms delay in **both** directions
+I think those numbers demonstrate how bad Envoy-FizzBuzz is.
+And to be clear, it's my `config.yaml`, not the Envoy implementation!
+
+Same setup with actual 65ms delay in **both** directions, via
 `sudo tc qdisc add dev lo root netem delay 65ms`
 
 ```sh
@@ -125,3 +141,6 @@ Running 10s test @ http://127.0.0.1:10000/
 Requests/sec:     74.69
 Transfer/sec:     48.21KB
 ```
+
+Limiting factor here is that `wrk` only establishes 10 connections in parallel and with a ping of 130ms, the Latency cannot be better than 130ms.
+And despite this horrible setup, numbers are in the same order of magnitude as Envoy-FizzBuzz.
