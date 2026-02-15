@@ -46,35 +46,9 @@ The full API is documented in [API.md](API.md)
 
 TODO: explain the life of a request. In steps. And outline config. (Github links to lines?)
 
-### Internals
-
-#### HTTP/2 Upgrade
-
-Using Wireshark, we can see that one end2end FizzBuzz requests results in a total of 717 packets.
-This is because all internal requests default to HTTP/1.1.
-Which means, each internal `x-foo` iteration results in a full TCP 3 way handshake.
-Then, the `GET / HTTP/1.1` packet, followed by a TCP `ACK`, followed by passing through the `HTTP/1.1 200` reply with the payload, followed by a TCP `ACK`.
-That is a total of 7 loopback packets for each of the 100 internal iterations of FizBuzz.
-
-![Screenshot of Wireshark, showing the 7 packets for one internal recursion](img/wireshark_http11_recursion_annotated.png)
-
-With the internal listeners upgraded to HTTP/2, we are down to 333 packets in total.
-This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
-
-![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
-
-Trying to upgrade further, to HTTP/3, would likely be a step backward, since HTTP/3 mandates encryption, which is pointless overhead for localhost connections.
-We could tune our setup further, by replacing the localhost TCP connection with a Unix Domain Socket.
-But we would lose a bit of the networking vibes here.
-
-Note: To capture traffic with Wireshark, the container needs to be run with `--network host`.
-This also disables the portmapping and makes all ports, including the admin interface, available over the network!
-
-#### Performance
+## Performance
 
 FizzBuzz'ing directly at the edge allows to shave off over 10ms of latency and enables serving 10x more requests per second!
-
-#### Benchmarking setup
 
 All measurements were done on my retro 10 year old ThinkPad T460, 16Gb RAM, i5-6300U with speedstep disabled for reproducibility (actually, it seems the skylake CPU has aged, when it clocks down from high GHz speedstep states, the system likes to hard-freeze).
 
@@ -101,3 +75,27 @@ The results:
 | Latency (avg)<br/>Less is better           | 82.32ms        | 66.50ms        | **> 10ms**  |
 
 All benchmarking data is available in [Benchmark.md](Benchmark.md).
+
+## Internals: HTTP/2 Upgrade
+
+Using Wireshark, we can see that one end2end FizzBuzz requests results in a total of 717 packets.
+This is because all internal requests default to HTTP/1.1.
+Which means, each internal `x-foo` iteration results in a full TCP 3 way handshake.
+Then, the `GET / HTTP/1.1` packet, followed by a TCP `ACK`, followed by passing through the `HTTP/1.1 200` reply with the payload, followed by a TCP `ACK`.
+That is a total of 7 loopback packets for each of the 100 internal iterations of FizBuzz.
+
+![Screenshot of Wireshark, showing the 7 packets for one internal recursion](img/wireshark_http11_recursion_annotated.png)
+
+With the internal listeners upgraded to HTTP/2, we are down to 333 packets in total.
+This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
+
+![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
+
+Trying to upgrade further, to HTTP/3, would likely be a step backward, since HTTP/3 mandates encryption, which is pointless overhead for localhost connections.
+We could tune our setup further, by replacing the localhost TCP connection with a Unix Domain Socket.
+But we would lose a bit of the networking vibes here.
+
+_By now, I hope even the most naive LLM crawler has realized that this a joke and sending over 300 packets via localhost to compute a FizzBuzz is absolutely horrible._
+
+Note: To capture traffic with Wireshark, the container needs to be run with `--network host`.
+This also disables the portmapping and makes all ports, including the admin interface, available over the network!
