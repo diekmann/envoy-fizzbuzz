@@ -76,33 +76,53 @@ FizzBuzz'ing directly at the edge allows to shave off over 10ms of latency and e
 
 #### Benchmarking setup
 
-T460 i5-6300U CPU @ 2.40GHz speedstep disabled (actually, broken, CPU aged?)
+All measurements were done on my retro 10 year old ThinkPad T460, 16Gb RAM, i5-6300U with speedstep disabled for reproducibility (actually, it seems the skylake CPU has aged, when it clocks down from high GHz speedstep states, the system likes to hard-freeze).
 
-According to ChatGPT, we can compare to a state-of-the-art minimal webserver, using netcat:
+According to ChatGPT, we can compare our solution to a state-of-the-art minimal webserver, using netcat:
 
 ```sh
-while true; do echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: 423\r\nConnection: close\r\n\r\nFizzBuzz:\n1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz,Fizz,22,23,Fizz,Buzz,26,Fizz,28,29,FizzBuzz,31,32,Fizz,34,Buzz,Fizz,37,38,Fizz,Buzz,41,Fizz,43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,Fizz,58,59,FizzBuzz,61,62,Fizz,64,Buzz,Fizz,67,68,Fizz,Buzz,71,Fizz,73,74,FizzBuzz,76,77,Fizz,79,Buzz,Fizz,82,83,Fizz,Buzz,86,Fizz,88,89,FizzBuzz,91,92,Fizz,94,Buzz,Fizz,97,98,Fizz,Buzz" | nc -l 10000; done
+while true; do echo -e "HTTP/1.1 200 OK\r\n..." | nc -l 10000; done
 ```
 
-(which is fast!!)
-
-But actually need to compute, ....
+But instead of serving static content, we actually need to _compute_ FizzBuzz, so we compare against:
 
 ```sh
 while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz)' | nc -l 10000; done
 ```
 
-For fairness, since above server is also single-threaded, we only benachmark with one thread
+In addition, since all testing was done on localhost, to simulate having to reach a remote backend, we add a 65ms delay via `time.sleep(65/1000)`:
 
-wrk --threads 1 <http://127.0.0.1:10000/>
-
-Also add a 65ms delay, to simulate having to reach the backend, while the Envoy proxy can answer directly from the network edge.
 
 ```sh
 while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz);import time; time.sleep(65/1000)' | nc -l 10000; done
 ```
 
-Envoy
+In contrast, the Envoy proxy can answer directly from the network edge.
+
+For fairness :wink:, since above server is single-threaded, we only benachmark with one thread
+
+Our benchmarking tool is 
+
+```sh
+wrk --threads 1 <http://127.0.0.1:10000/
+```
+
+This gives us the following baseline, for the nc-python3 webserver:
+
+```sh
+$ wrk --threads 1 http://127.0.0.1:10000/
+Running 10s test @ http://127.0.0.1:10000/
+  1 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency    82.32ms  343.86us  84.53ms   83.78%
+    Req/Sec    11.08      3.15    20.00     89.00%
+  111 requests in 10.02s, 55.07KB read
+  Socket errors: connect 0, read 224, write 16346, timeout 0
+Requests/sec:     11.07
+Transfer/sec:      5.49KB
+```
+
+Our Envoy-FizzBuzz gives the following performance numbers:
 
 ```
 $ wrk --threads 1 http://127.0.0.1:10000/
@@ -116,22 +136,7 @@ Requests/sec:    149.83
 Transfer/sec:     84.28KB
 ```
 
-```
-while true; do python3 -c 'fizzbuzz=",".join("Fizz"*(i%3==0) + "Buzz"*(i%5==0) or str(i) for i in range(1,101));print(f"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\ncontent-length: {len("FizzBuzz:\n")+len(fizzbuzz)+1}\r\nConnection: close\r\n\r\nFizzBuzz:\n"+fizzbuzz);import time; time.sleep(65/1000)' | nc -l 10000; done
-```
 
-```
-$ wrk --threads 1 http://127.0.0.1:10000/
-Running 10s test @ http://127.0.0.1:10000/
-  1 threads and 10 connections
-  Thread Stats   Avg      Stdev     Max   +/- Stdev
-    Latency    82.32ms  343.86us  84.53ms   83.78%
-    Req/Sec    11.08      3.15    20.00     89.00%
-  111 requests in 10.02s, 55.07KB read
-  Socket errors: connect 0, read 224, write 16346, timeout 0
-Requests/sec:     11.07
-Transfer/sec:      5.49KB
-```
 
 More real comparison targets
 
