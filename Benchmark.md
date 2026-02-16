@@ -1,6 +1,6 @@
 # Benchmark Raw Numbers
 
-All tests done on a ThinkPad T460, 16Gb RAM, i5-6300U with speedstep disabled, on localhost.
+All tests done on a ThinkPad T460, 16 GB RAM, i5-6300U with speedstep disabled, on localhost.
 
 ## Envoy-FizzBuzz
 

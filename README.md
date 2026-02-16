@@ -64,19 +64,19 @@ Nothing special happens here, we only use the default HTTP router [[yaml](https:
     * The magic is in the http filters. First, a [Lua filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/lua_filter) reads the `x-foo` header and increments it by one [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L69-L82)].
     * Then, a second Lua filter reads the `x-foo` header again, computes the FizzBuzz, and stores the result in an accumulator-like `x-fizzbuzz` HTTP header [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L83-L98)].
     * After the filters, the routing happens (technically, the routing decision is already computed at the beginning, but it is only carried out at the end). This time, the routing is a bit more exciting.
-      * First, we check if the `x-foo` header is greater or equal to 100 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L55-L63)] and if so, route to a cluster called `self_output`, defied as 127.0.0.1:10002 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L160-L171)].
+      * First, we check if the `x-foo` header is greater than or equal to 100 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L55-L63)] and if so, route to a cluster called `self_output`, defined as 127.0.0.1:10002 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L160-L171)].
       * If the first routing didn't match, we just route to the `self` cluster [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L64-L67)].
 3. A `GET / HTTP/2` with HTTP headers `x-foo: 1`, `x-fizzbuzz: 1` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
 4. A `GET / HTTP/2` with HTTP headers `x-foo: 2`, `x-fizzbuzz: 1,2` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
 5. A `GET / HTTP/2` with HTTP headers `x-foo: 3`, `x-fizzbuzz: 1,2,Fizz` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
 6. ...
-7. A `GET / HTTP/2` with HTTP headers `x-foo: 100`, `x-fizzbuzz: 1,2,Fizz,4,Buzz,...` arrives on port 10002 at the envoy listener called `output` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L102-L106)].
+7. A `GET / HTTP/2` with HTTP headers `x-foo: 100`, `x-fizzbuzz: 1,2,Fizz,4,Buzz,...` arrives on port 10002 at the Envoy listener called `output` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L102-L106)].
    * Similar to above, a Lua filter runs.
    This filter takes the `x-fizzbuzz` header and turns it into HTTP 200 reply with the FizzBuzz as normal `text/plain` payload [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L123-L145)].
    With this direct reply, HTTP routing ends and further routing and clusters are ignored.
 8. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
 9. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
-10. ... Oh yes, we have over 100 outstanding requests at this point, and the result slowly trickles back.
+10. ... Oh yes, we have more than 100 outstanding requests at this point, and the result slowly trickles back.
 11. A `HTTP/1.1 200 OK` with FizzBuzz payload is sent back to the original request.
 
 
@@ -84,7 +84,7 @@ Nothing special happens here, we only use the default HTTP router [[yaml](https:
 
 FizzBuzz'ing directly at the edge allows to shave off over 10ms of latency and enables serving 10x more requests per second!
 
-All measurements were done on my retro 10 year old ThinkPad T460, 16Gb RAM, i5-6300U with speedstep disabled for reproducibility (actually, it seems the skylake CPU has aged, when it clocks down from high GHz speedstep states, the system likes to hard-freeze).
+All measurements were done on my retro 10 year old ThinkPad T460, 16 GB RAM, i5-6300U with speedstep disabled for reproducibility (actually, it seems the Skylake CPU has aged, when it clocks down from high GHz speedstep states, the system likes to hard-freeze).
 
 According to ChatGPT, we can compare our solution to a state-of-the-art minimal webserver, using netcat in a `while true` loop.
 But instead of serving static content, we actually need to _compute_ FizzBuzz, so we use `python3` to compute the HTTP reply.
@@ -100,30 +100,30 @@ In contrast, the Envoy proxy can answer directly from the network edge.
 
 I'm sure this is an absolutely fair setup. :wink:
 
-Since above reference FizzBuzz server is single-threaded, we only benachmark with one thread. Our benchmarking tool is `wrk --threads 1 http://127.0.0.1:10000/`.
+Since above reference FizzBuzz server is single-threaded, we only benchmark with one thread. Our benchmarking tool is `wrk --threads 1 http://127.0.0.1:10000/`.
 The results:
 
 |                                            | nc-python3     | Envoy-FizzBuzz | Speedup     |
 | ------------------------------------------ | -------------- | -------------- | ----------- |
-| Reqests / Second (avg)<br/>More is better  | 11.08          | 150.40         | **> 10X**   |
+| Requests / Second (avg)<br/>More is better  | 11.08          | 150.40         | **> 10X**   |
 | Latency (avg)<br/>Less is better           | 82.32ms        | 66.50ms        | **> 10ms**  |
 
 All benchmarking data is available in [Benchmark.md](Benchmark.md).
 
 ## Internals: HTTP/2 Upgrade
 
-Using Wireshark, we can see that one end2end FizzBuzz requests results in a total of 717 packets.
+Using Wireshark, we can see that one end-to-end FizzBuzz request results in a total of 717 packets.
 This is because all internal requests default to HTTP/1.1.
 Which means, each internal `x-foo` iteration results in a full TCP 3 way handshake.
 Then, the `GET / HTTP/1.1` packet, followed by a TCP `ACK`, followed by passing through the `HTTP/1.1 200` reply with the payload, followed by a TCP `ACK`.
-That is a total of 7 loopback packets for each of the 100 internal iterations of FizBuzz.
+That is a total of 7 loopback packets for each of the 100 internal iterations of FizzBuzz.
 
 ![Screenshot of Wireshark, showing the 7 packets for one internal recursion](img/wireshark_http11_recursion_annotated.png)
 
 With the internal listeners upgraded to HTTP/2 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L150)], we are down to 333 packets in total.
 This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
 
-![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
+![Screenshot of Wireshark, showing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
 
 Trying to upgrade further, to HTTP/3, would likely be a step backward, since HTTP/3 mandates encryption, which is pointless overhead for localhost connections.
 We could tune our setup further, by replacing the localhost TCP connection with a Unix Domain Socket.
