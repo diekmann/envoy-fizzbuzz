@@ -1,6 +1,8 @@
 # Envoy-FizzBuzz
 
-FizzBuzz in the Envoy Proxy.
+**TL;DR**: FizzBuzz as `config.yaml` in the Envoy Proxy.
+
+Leveraging the high-performance Envoy proxy to bring FizzBuzz technologies to the network edge.
 
 ## Background
 

@@ -144,3 +144,65 @@ Transfer/sec:     48.21KB
 
 Limiting factor here is that `wrk` only establishes 10 connections in parallel and with a ping of 130ms, the Latency cannot be better than 130ms.
 And despite this horrible setup, numbers are in the same order of magnitude as Envoy-FizzBuzz.
+
+## Envoy Direct Response
+
+Finally, we need to show that indeed Envoy can be fast, when used correctly.
+Using the [Direct Response](https://www.envoyproxy.io/docs/envoy/latest/configuration/listeners/network_filters/direct_response_filter) filter, we can reply with a static hard-coded FizzBuzz.
+
+The full (minimal) config:
+
+```yaml
+static_resources:
+  listeners:
+    - name: listener_10000
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 10000
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                codec_type: AUTO
+                route_config:
+                  virtual_hosts:
+                    - name: static_html_host
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          direct_response:
+                            status: 200
+                            body:
+                              inline_string: |
+                                FizzBuzz:
+                                1,2,Fizz,4,Buzz,Fizz,7,8,Fizz,Buzz,11,Fizz,13,14,FizzBuzz,16,17,Fizz,19,Buzz,Fizz,22,23,Fizz,Buzz,26,Fizz,28,29,FizzBuzz,31,32,Fizz,34,Buzz,Fizz,37,38,Fizz,Buzz,41,Fizz,43,44,FizzBuzz,46,47,Fizz,49,Buzz,Fizz,52,53,Fizz,Buzz,56,Fizz,58,59,FizzBuzz,61,62,Fizz,64,Buzz,Fizz,67,68,Fizz,Buzz,71,Fizz,73,74,FizzBuzz,76,77,Fizz,79,Buzz,Fizz,82,83,Fizz,Buzz,86,Fizz,88,89,FizzBuzz,91,92,Fizz,94,Buzz,Fizz,97,98,Fizz,Buzz
+                          response_headers_to_add:
+                            - header:
+                                key: content-type
+                                value: text/html
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+```
+
+We run it just like Envoy-FizzBuzz.
+The results are great:
+
+```sh
+$ wrk --threads 1 http://127.0.0.1:10000/
+Running 10s test @ http://127.0.0.1:10000/
+  1 threads and 10 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   499.15us  214.16us   4.42ms   77.93%
+    Req/Sec    19.75k   824.46    21.64k    66.34%
+  198534 requests in 10.10s, 102.24MB read
+Requests/sec:  19657.06
+Transfer/sec:     10.12MB
+```
+
+It's almost twice as fast as nginx (without artificial delay) and over 100X better than Envoy-FizzBuzz, both in terms of requests per second, as well as latency.
