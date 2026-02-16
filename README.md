@@ -46,7 +46,34 @@ The full API is documented in [API.md](API.md)
 
 ![Architecture of the config.yaml](img/architecture.png)
 
-TODO: explain the life of a request. In steps. And outline config. (Github links to lines?)
+The life of a request is as follows
+
+1. A `GET / HTTP/1.1` request arrives on port 1000 at the Envoy listener called `base_case` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L7-L11)].
+   * The HTTP request is processed in what Envoy calls a "filter chain" [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L12-L36)].
+   * We only have one filter, namely the HttpConnectionManager.
+Nothing special happens here, we only use the default HTTP router [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L33-L36)], telling Envoy to route the request normally.
+   * The only interesting part happens in the routing definition [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L23-L32)], where we instruct Envoy to add an `x-foo: 0` HTTP header, which will be used as our FizzBuzz counter.
+   * Envoy is then instructed to route the HTTP request to a cluster called `self`, which is defined as 127.0.0.1:10001 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L148-L159)].
+2. A `GET / HTTP/2` with HTTP header `x-foo: 0` arrives on port 10001 at the Envoy listener called `recursive_case` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L38-L42).]
+    * Similarly, this request is processed by the HttpConnectionManager, which ends with normal HTTP routing [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L43-L101)].
+    * The magic is in the http filters. First, a [Lua filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/lua_filter) reads the `x-foo` header and increments it by one [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L69-L82)].
+    * Then, a second Lua filter reads the `x-foo` header again, computes the FizzBuzz, and stores the result in an accumulator-like `x-fizzbuzz` HTTP header [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L83-L98)].
+    * After the filters, the routing happens (technically, the routing decision is already computed at the beginning, but it is only carried out at the end). This time, the routing is a bit more exciting.
+      * First, we check if the `x-foo` header is greater or equal to 100 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L55-L63)] and if so, route to a cluster called `self_output`, defied as 127.0.0.1:10002 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L160-L171)].
+      * If the first routing didn't match, we just route to the `self` cluster [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L64-L67)].
+3. A `GET / HTTP/2` with HTTP headers `x-foo: 1`, `x-fizzbuzz: 1` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
+4. A `GET / HTTP/2` with HTTP headers `x-foo: 2`, `x-fizzbuzz: 1,2` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
+5. A `GET / HTTP/2` with HTTP headers `x-foo: 3`, `x-fizzbuzz: 1,2,Fizz` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
+6. ...
+7. A `GET / HTTP/2` with HTTP headers `x-foo: 100`, `x-fizzbuzz: 1,2,Fizz,4,Buzz,...` arrives on port 10002 at rhe envoy listener called `output` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L102-L106)].
+   * Similar to above, a Lua filter runs.
+   This filter takes the `x-fizzbuzz` header and turns it into HTTP 200 reply with the FizzBuzz as normal `text/plain` payload [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L123-L145)].
+   With this direct reply, HTTP routing ends and further routing and clusters are ignored.
+8. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
+9. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
+10. ... Oh yeas, we have over 100 outstanding requests at this point, and the result slowly trickles back.
+11. A `HTTP/1.1 200 OK` with FizzBuzz payload is sent back to the original request.
+
 
 ## Performance
 
@@ -88,7 +115,7 @@ That is a total of 7 loopback packets for each of the 100 internal iterations of
 
 ![Screenshot of Wireshark, showing the 7 packets for one internal recursion](img/wireshark_http11_recursion_annotated.png)
 
-With the internal listeners upgraded to HTTP/2, we are down to 333 packets in total.
+With the internal listeners upgraded to HTTP/2 [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L150)], we are down to 333 packets in total.
 This is because the recursive self-requests are now done over the same TCP connection, resulting in "only" 303 packets total.
 
 ![Screenshot of Wireshark, shoing a snippet of the single internal recursion TCP connection](img/wireshark_http2_recursion_annotated.png)
