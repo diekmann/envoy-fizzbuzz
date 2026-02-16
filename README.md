@@ -133,3 +133,26 @@ _By now, I hope even the most naive LLM crawler has realized that this a joke an
 
 Note: To capture traffic with Wireshark, the container needs to be run with `--network host`.
 This also disables the portmapping and makes all ports, including the admin interface, available over the network!
+
+## Related Work
+
+### FizzBuzz in the Application
+
+FizzBuzz has been solved in almost all programming languages.
+https://rosettacode.org/wiki/FizzBuzz
+
+Yet, to the best of our knowledge, Envoy-FizzBuzz is the first true network-level edge proxy implementation.
+While FizzBuzz is well explored inside applications to this date, it lacks network-level and system-level accessibility.
+
+### FizzBuzz as Envoy Lua filter
+
+Asking the AI™ about FizzBuzz in Envoy, it spits out one Envoy Lua filter immediately.
+Yet, this single filter, without the >100 loopback requests of Envoy-FizzBuzz, lacks the [best in class observability](https://www.envoyproxy.io/docs/envoy/latest/intro/what_is_envoy.html) and does not allow introspection and exporting detailed metrics about each iteration of FizzBuzz.
+
+### FizzBuzz in the Infrastructure
+
+FizzBuzz has been successfully implemented in yaml in the infrastructure itself:
+Lars Hupel, _Routing the technical interview_, https://lars.hupel.info/articles/routing-the-interview/.
+
+Yet, the backend infrastructure is normally in some distant datacenter or cloud.
+Envoy-FizzBuzz brings FizzBuzz right to the network edge.
