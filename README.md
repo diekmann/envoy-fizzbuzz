@@ -19,7 +19,12 @@ This enables all applications in a service mesh to seamlessly leverage FizzBuzz 
 With the `config.yaml` of this repository, a genuine vanilla upstream Envoy container image is sufficient for Envoy-FizzBuzz:
 
 ```sh
-podman run --rm -it -p 127.0.0.1:9901:9901 -p 10000:10000 -p 127.0.0.1:10001:10001 -p127.0.0.1:10002:10002 -v $(pwd)/config.yaml:/config.yaml docker.io/envoyproxy/envoy:v1.37-latest --log-level info -c config.yaml
+podman run --rm -it -p 127.0.0.1:9901:9901 \
+    -p 10000:10000 \
+    -p 127.0.0.1:10001:10001 -p127.0.0.1:10002:10002 \
+    -v $(pwd)/config.yaml:/config.yaml \
+    docker.io/envoyproxy/envoy:v1.37-latest \
+        --log-level info -c config.yaml
 ```
 
 For production usage, please note the security-hardening of the container runtime:
