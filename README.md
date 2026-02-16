@@ -65,13 +65,13 @@ Nothing special happens here, we only use the default HTTP router [[yaml](https:
 4. A `GET / HTTP/2` with HTTP headers `x-foo: 2`, `x-fizzbuzz: 1,2` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
 5. A `GET / HTTP/2` with HTTP headers `x-foo: 3`, `x-fizzbuzz: 1,2,Fizz` arrives on port 10001 at the Envoy listener called `recursive_case`, ...
 6. ...
-7. A `GET / HTTP/2` with HTTP headers `x-foo: 100`, `x-fizzbuzz: 1,2,Fizz,4,Buzz,...` arrives on port 10002 at rhe envoy listener called `output` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L102-L106)].
+7. A `GET / HTTP/2` with HTTP headers `x-foo: 100`, `x-fizzbuzz: 1,2,Fizz,4,Buzz,...` arrives on port 10002 at the envoy listener called `output` [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L102-L106)].
    * Similar to above, a Lua filter runs.
    This filter takes the `x-fizzbuzz` header and turns it into HTTP 200 reply with the FizzBuzz as normal `text/plain` payload [[yaml](https://github.com/diekmann/envoy-fizzbuzz/blob/826f565e772b05ea9646fed86883b0b340f06fc3/config.yaml#L123-L145)].
    With this direct reply, HTTP routing ends and further routing and clusters are ignored.
 8. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
 9. A `HTTP/2 200 OK` with FizzBuzz payload response is sent back to the previous connection in the `recursive_case` listener.
-10. ... Oh yeas, we have over 100 outstanding requests at this point, and the result slowly trickles back.
+10. ... Oh yes, we have over 100 outstanding requests at this point, and the result slowly trickles back.
 11. A `HTTP/1.1 200 OK` with FizzBuzz payload is sent back to the original request.
 
 
